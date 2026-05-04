@@ -1,7 +1,7 @@
   import axios from 'axios';
   import AsyncStorage from '@react-native-async-storage/async-storage';
 
-  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  const API_URL = 'https://turismedback-production.up.railway.app';
 
   const client = axios.create({
     baseURL: API_URL,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -15,6 +15,7 @@ import PromotionsScreen from '../screens/Promotions/PromotionsScreen';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
 import AdminScreen from '../screens/Admin/AdminScreen';
 import PlaceDetailScreen from '../screens/Places/PlaceDetailScreen';
+import SplashScreen from '../screens/Splash/SplashScreen'; // <-- importar
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -78,6 +79,12 @@ const AuthStack = () => (
 
 const AppNavigator = () => {
   const { user, loading } = useAuth();
+  const [splashDone, setSplashDone] = useState(false); // <-- estado del splash
+
+  // Mientras auth carga, mostrar solo el splash (no duplicar loading)
+  if (!splashDone) {
+    return <SplashScreen onFinish={() => setSplashDone(true)} />;
+  }
 
   if (loading) {
     return (

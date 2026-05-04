@@ -1,32 +1,144 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  ImageBackground,
+  StatusBar,
+  Animated,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { getRecommendations } from '../../api/placesApi';
 
+const BG_IMAGE = require('../../../assets/splash-medellin.png');
+
+const TYPE_CONFIG = {
+  restaurant: { emoji: '🍽️', label: 'Restaurante', color: '#E85D04' },
+  bar:        { emoji: '🍺', label: 'Bar',          color: '#9B2226' },
+  club:       { emoji: '🎵', label: 'Club',         color: '#6A0572' },
+  cafe:       { emoji: '☕', label: 'Café',         color: '#774936' },
+  park:       { emoji: '🌳', label: 'Parque',       color: '#386641' },
+};
+
+const getTypeConfig = (type) =>
+  TYPE_CONFIG[type] || { emoji: '📍', label: type || 'Lugar', color: '#555' };
+
+/* ─── Tarjeta ───────────────────────────────────────────────────── */
+const PlaceCard = ({ item, onPress, index }) => {
+  const cfg = getTypeConfig(item.type || item.place_type);
+  const fadeAnim  = React.useRef(new Animated.Value(0)).current;
+  const slideAnim = React.useRef(new Animated.Value(20)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 400, delay: index * 80, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, delay: index * 80, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.82}>
+        <View style={[styles.cardSidebar, { backgroundColor: cfg.color }]} />
+        <View style={styles.cardBody}>
+          <View style={[styles.emojiCircle, { backgroundColor: cfg.color + '18' }]}>
+            <Text style={styles.emoji}>{cfg.emoji}</Text>
+          </View>
+          <View style={styles.cardInfo}>
+            <Text style={styles.placeName} numberOfLines={1}>{item.name}</Text>
+            <View style={styles.badgeRow}>
+              <View style={[styles.badge, { backgroundColor: cfg.color + '15' }]}>
+                <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
+              </View>
+            </View>
+            {item.description && (
+              <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
+            )}
+            {item.address && (
+              <View style={styles.addressRow}>
+                <Ionicons name="location-outline" size={12} color="#aaa" />
+                <Text style={styles.address}>{item.address}</Text>
+              </View>
+            )}
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#ccc" style={{ marginTop: 2 }} />
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+/* ─── Botón de perfil ───────────────────────────────────────────── */
+const ProfileButton = ({ onPress }) => {
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const glowAnim  = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0, duration: 1800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  const handlePressIn = () =>
+    Animated.spring(scaleAnim, { toValue: 0.88, friction: 6, useNativeDriver: true }).start();
+
+  const handlePressOut = () =>
+    Animated.spring(scaleAnim, { toValue: 1, friction: 6, useNativeDriver: true }).start();
+
+  const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.75] });
+  const glowScale   = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.25] });
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={1}
+    >
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        {/* Anillo de glow pulsante */}
+        <Animated.View
+          style={[
+            styles.profileGlow,
+            { opacity: glowOpacity, transform: [{ scale: glowScale }] },
+          ]}
+        />
+        {/* Botón principal */}
+        <View style={styles.profileBtn}>
+          <Ionicons name="person" size={20} color="#fff" />
+          {/* Badge punto */}
+          <View style={styles.profileBadge} />
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+/* ─── HomeScreen ────────────────────────────────────────────────── */
 const HomeScreen = ({ navigation }) => {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
   useFocusEffect(
-    useCallback(() => {
-      loadRecommendations();
-    }, [])
+    useCallback(() => { loadRecommendations(); }, [])
   );
 
   const loadRecommendations = async () => {
     setLoading(true);
     try {
       const response = await getRecommendations(user.id);
-      if (response.success) {
-        setRecommendations(response.data);
-      }
-    } catch (error) {
+      if (response.success) setRecommendations(response.data);
+    } catch {
       Alert.alert(
         'Bienvenido',
         'Primero responde el cuestionario para ver tus recomendaciones',
@@ -37,171 +149,237 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
-  const getTypeEmoji = (type) => {
-    const emojis = {
-      restaurant: '🍽️',
-      bar: '🍺',
-      club: '🎵',
-      cafe: '☕',
-      park: '🌳',
-    };
-    return emojis[type] || '📍';
-  };
-
-  const renderPlace = ({ item }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => navigation.navigate('PlaceDetail', { place: item })}
-    >
-      <View style={styles.cardHeader}>
-        <Text style={styles.emoji}>{getTypeEmoji(item.type || item.place_type)}</Text>
-        <View style={styles.cardInfo}>
-          <Text style={styles.placeName}>{item.name}</Text>
-          <Text style={styles.placeType}>{item.type || item.place_type}</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color="#ccc" />
+  const ListHeader = () => (
+    <View style={styles.header}>
+      <View>
+        <Text style={styles.appName}>TurisMed</Text>
+        <Text style={styles.greeting}>Hola, {user?.name} </Text>
+        <Text style={styles.subtitle}>Lugares recomendados para ti</Text>
       </View>
-      {item.description && (
-        <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
-      )}
-      {item.address && (
-        <Text style={styles.address}>📍 {item.address}</Text>
-      )}
-    </TouchableOpacity>
+      <ProfileButton onPress={() => navigation.navigate('Profile')} />
+    </View>
   );
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#E85D04" />
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hola, {user?.name} 👋</Text>
-          <Text style={styles.subtitle}>Lugares recomendados para ti</Text>
-        </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-          <Ionicons name="person-circle-outline" size={32} color="#fff" />
-        </TouchableOpacity>
-      </View>
+    <ImageBackground source={BG_IMAGE} style={styles.bg} resizeMode="cover">
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <View style={styles.overlay} />
 
-      {recommendations.length === 0 ? (
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>No hay recomendaciones aún</Text>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => navigation.navigate('Questionnaire')}
-          >
-            <Text style={styles.buttonText}>Responder cuestionario</Text>
-          </TouchableOpacity>
-        </View>
+      {loading ? (
+        <>
+          <ListHeader />
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#C9A227" />
+            <Text style={styles.loadingText}>Cargando recomendaciones…</Text>
+          </View>
+        </>
+      ) : recommendations.length === 0 ? (
+        <>
+          <ListHeader />
+          <View style={styles.centered}>
+            <Text style={{ fontSize: 48, marginBottom: 14 }}>🗺️</Text>
+            <Text style={styles.emptyTitle}>Sin recomendaciones aún</Text>
+            <Text style={styles.emptyText}>
+              Responde el cuestionario y te mostraremos los mejores lugares de Medellín.
+            </Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('Questionnaire')} activeOpacity={0.85}>
+              <Text style={styles.primaryBtnText}>Responder cuestionario</Text>
+            </TouchableOpacity>
+          </View>
+        </>
       ) : (
         <FlatList
           data={recommendations}
           keyExtractor={(item) => item.id.toString()}
-          renderItem={renderPlace}
-          contentContainerStyle={styles.list}
+          renderItem={({ item, index }) => (
+            <PlaceCard
+              item={item}
+              index={index}
+              onPress={() => navigation.navigate('PlaceDetail', { place: item })}
+            />
+          )}
+          ListHeaderComponent={<ListHeader />}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
       )}
-    </View>
+    </ImageBackground>
   );
 };
 
+/* ─── Estilos ───────────────────────────────────────────────────── */
 const styles = StyleSheet.create({
-  container: {
+  bg: {
     flex: 1,
-    backgroundColor: '#fff',
+    width: '100%',
+    height: '100%',
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10, 10, 30, 0.48)',
   },
+
+  /* Header */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 50,
-    backgroundColor: '#E85D04',
+    alignItems: 'flex-end',
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 24,
+  },
+  appName: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#C9A227',
+    letterSpacing: 5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
   },
   greeting: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '900',
     color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   subtitle: {
     fontSize: 13,
-    color: '#ffe0cc',
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.65)',
+    marginTop: 4,
+    letterSpacing: 0.3,
   },
-  list: {
-    padding: 16,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: 'row',
+  profileBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#E85D04',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.45)',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'center',
+    shadowColor: '#E85D04',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  emoji: {
-    fontSize: 32,
-    marginRight: 12,
+  profileGlow: {
+    position: 'absolute',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#E85D04',
+    top: 0,
+    left: 0,
   },
-  cardInfo: {
+
+
+  listContent: {
+    paddingBottom: 40,
+  },
+
+  /* Tarjeta — fondo blanco sólido, solo ella */
+  card: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#fff',           // ← blanco sólido solo en la tarjeta
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  cardSidebar: {
+    width: 4,
+  },
+  cardBody: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
   },
+  emojiCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  emoji: { fontSize: 24 },
+  cardInfo: { flex: 1 },
   placeName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '800',
+    color: '#1a1a1a',
+    marginBottom: 5,
   },
-  placeType: {
-    fontSize: 13,
-    color: '#E85D04',
-    textTransform: 'capitalize',
+  badgeRow: { flexDirection: 'row', marginBottom: 7 },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   description: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
+    lineHeight: 18,
     marginBottom: 6,
   },
-  address: {
-    fontSize: 13,
-    color: '#999',
+  addressRow: { flexDirection: 'row', alignItems: 'center' },
+  address: { fontSize: 12, color: '#aaa', marginLeft: 4 },
+
+  /* Estados */
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  loadingText: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginTop: 14 },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+    marginBottom: 10,
+    textAlign: 'center',
   },
   emptyText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 20,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.65)',
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 28,
   },
-  button: {
+  primaryBtn: {
     backgroundColor: '#E85D04',
-    padding: 14,
-    borderRadius: 10,
+    borderRadius: 14,
+    height: 54,
+    paddingHorizontal: 32,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#E85D04',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  buttonText: {
+  primaryBtnText: {
     color: '#fff',
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
 
